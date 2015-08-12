@@ -225,10 +225,12 @@ function synthesizeDragOver(aSrcElement, aDestElement, aDragData, aDropEffect, a
   if (!aWindow)
     aWindow = window;
   if (!aDestWindow)
-    aDestWindow = aWindow;
+    throw new Error('aDestWindow not specified'); //aDestWindow = aWindow;
 
   var dataTransfer;
   var trapDrag = function(event) {
+	  console.info('in trapdrag, event:', event);
+	  console.info('in trapdrag, dataTransfer:', event.dataTransfer);
     dataTransfer = event.dataTransfer;
     if (aDragData) {
       for (var i = 0; i < aDragData.length; i++) {
@@ -245,22 +247,24 @@ function synthesizeDragOver(aSrcElement, aDestElement, aDragData, aDropEffect, a
   // need to use real mouse action
   aWindow.addEventListener("dragstart", trapDrag, true);
   EventUtils.synthesizeMouseAtCenter(aSrcElement, { type: "mousedown" }, aWindow);
-
+console.log('h5');
   var rect = aSrcElement.getBoundingClientRect();
   var x = rect.width / 2;
   var y = rect.height / 2;
+console.log('h6');
   EventUtils.synthesizeMouse(aSrcElement, x, y, { type: "mousemove" }, aWindow);
   EventUtils.synthesizeMouse(aSrcElement, x+10, y+10, { type: "mousemove" }, aWindow);
   aWindow.removeEventListener("dragstart", trapDrag, true);
+console.log('h7');
 
   var event = createDragEventObject("dragenter", aDestElement, aDestWindow,
                                     dataTransfer, aDragEvent);
   EventUtils.sendDragEvent(event, aDestElement, aDestWindow);
-
+console.log('h8');
   event = createDragEventObject("dragover", aDestElement, aDestWindow,
                                 dataTransfer, aDragEvent);
   var result = EventUtils.sendDragEvent(event, aDestElement, aDestWindow);
-
+console.log('h9');
   return [result, dataTransfer];
 }
 
@@ -323,9 +327,9 @@ function synthesizeDropAfterDragOver(aResult, aDataTransfer, aDestElement, aDest
 function synthesizeDrop(aSrcElement, aDestElement, aDragData, aDropEffect, aWindow, aDestWindow, aDragEvent={})
 {
   if (!aWindow)
-    aWindow = window;
+    throw new Error('aWindow not specified'); //aWindow = window;
   if (!aDestWindow)
-    aDestWindow = aWindow;
+    throw new Error('aDestWindow not specified'); //aDestWindow = aWindow;
 
   var ds = Components.classes["@mozilla.org/widget/dragservice;1"].
            getService(Components.interfaces.nsIDragService);
@@ -337,6 +341,7 @@ function synthesizeDrop(aSrcElement, aDestElement, aDragData, aDropEffect, aWind
                                                     aDragData, aDropEffect,
                                                     aWindow, aDestWindow,
                                                     aDragEvent);
+	console.info('result:', result, 'dataTransfer:', dataTransfer);
     return synthesizeDropAfterDragOver(result, dataTransfer, aDestElement,
                                        aDestWindow, aDragEvent);
   } finally {

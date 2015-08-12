@@ -48,9 +48,12 @@ window.__defineGetter__('Cc', function() {
  *
  * sendMouseEvent({type:'click'}, 'node');
  */
-function getElement(id) {
+
+var navigator = Cc["@mozilla.org/network/protocol;1?name=http"].getService(Ci.nsIHttpProtocolHandler);
+
+function getElement(id, aWindow) {
   return ((typeof(id) == "string") ?
-    document.getElementById(id) : id); 
+    aWindow.document.getElementById(id) : id); 
 };   
 
 this.$ = this.getElement;
@@ -103,7 +106,7 @@ function sendMouseEvent(aEvent, aTarget, aWindow) {
  * object with the properties set that the real drag event object should
  * have. This includes the type of the drag event.
  */
-function sendDragEvent(aEvent, aTarget, aWindow=window) {
+function sendDragEvent(aEvent, aTarget, aWindow) {
   if (['drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop'].indexOf(aEvent.type) == -1) {
     throw new Error("sendDragEvent doesn't know about event type '" + aEvent.type + "'");
   }
@@ -652,9 +655,9 @@ function synthesizeKey(aKey, aEvent, aWindow)
   if (!TIP) {
     return;
   }
-  var modifiers = _emulateToActivateModifiers(TIP, aEvent);
+  var modifiers = _emulateToActivateModifiers(TIP, aEvent, aWindow);
   var keyEventDict = _createKeyboardEventDictionary(aKey, aEvent);
-  var keyEvent = new KeyboardEvent("", keyEventDict.dictionary);
+  var keyEvent = new aWindow.KeyboardEvent("", keyEventDict.dictionary);
   var dispatchKeydown =
     !("type" in aEvent) || aEvent.type === "keydown" || !aEvent.type;
   var dispatchKeyup =
@@ -665,7 +668,7 @@ function synthesizeKey(aKey, aEvent, aWindow)
       TIP.keydown(keyEvent, keyEventDict.flags);
       if ("repeat" in aEvent && aEvent.repeat > 1) {
         keyEventDict.dictionary.repeat = true;
-        var repeatedKeyEvent = new KeyboardEvent("", keyEventDict.dictionary);
+        var repeatedKeyEvent = new aWindow.KeyboardEvent("", keyEventDict.dictionary);
         for (var i = 1; i < aEvent.repeat; i++) {
           TIP.keydown(repeatedKeyEvent, keyEventDict.flags);
         }
@@ -675,7 +678,7 @@ function synthesizeKey(aKey, aEvent, aWindow)
       TIP.keyup(keyEvent, keyEventDict.flags);
     }
   } finally {
-    _emulateToInactivateModifiers(TIP, modifiers);
+    _emulateToInactivateModifiers(TIP, modifiers, aWindow);
   }
 }
 
@@ -934,13 +937,14 @@ function _getDOMWindowUtils(aWindow)
   //  layout/base/tests/test_reftests_with_caret.html
   //  chrome: toolkit/content/tests/chrome/test_findbar.xul
   //  chrome: toolkit/content/tests/chrome/test_popup_anchor.xul
-  if ("SpecialPowers" in window && window.SpecialPowers != undefined) {
+  /*
+  if ("SpecialPowers" in aWindow && aWindow.SpecialPowers != undefined) {
     return SpecialPowers.getDOMWindowUtils(aWindow);
   }
   if ("SpecialPowers" in parent && parent.SpecialPowers != undefined) {
     return parent.SpecialPowers.getDOMWindowUtils(aWindow);
   }
-
+  */
   //TODO: this is assuming we are in chrome space
   return aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
                                getInterface(Ci.nsIDOMWindowUtils);
@@ -960,6 +964,7 @@ var TIPMap = new WeakMap();
 function _getTIP(aWindow, aCallback)
 {
   if (!aWindow) {
+	  console.error('no aWindow');
     aWindow = window;
   }
   var tip;
@@ -980,6 +985,7 @@ function _getTIP(aWindow, aCallback)
 
 function _guessKeyNameFromKeyCode(aKeyCode)
 {
+  const KeyboardEvent = Ci.nsIDOMKeyEvent;
   switch (aKeyCode) {
     case KeyboardEvent.DOM_VK_CANCEL:
       return "Cancel";
@@ -1126,6 +1132,7 @@ function _guessKeyNameFromKeyCode(aKeyCode)
 
 function _createKeyboardEventDictionary(aKey, aKeyEvent)
 {
+  const KeyEvent = Ci.nsIDOMKeyEvent;
   var result = { dictionary: null, flags: 0 };
 
   var keyCodeIsDefined = "keyCode" in aKeyEvent;
@@ -1167,7 +1174,7 @@ function _createKeyboardEventDictionary(aKey, aKeyEvent)
   return result;
 }
 
-function _emulateToActivateModifiers(aTIP, aKeyEvent)
+function _emulateToActivateModifiers(aTIP, aKeyEvent, aWindow)
 {
   if (!aKeyEvent) {
     return null;
@@ -1201,7 +1208,7 @@ function _emulateToActivateModifiers(aTIP, aKeyEvent)
     if (aTIP.getModifierState(modifiers.normal[i].key)) {
       continue; // already activated.
     }
-    var event = new KeyboardEvent("", { key: modifiers.normal[i].key });
+    var event = new aWindow.KeyboardEvent("", { key: modifiers.normal[i].key });
     aTIP.keydown(event,
       aTIP.KEY_NON_PRINTABLE_KEY | aTIP.KEY_DONT_DISPATCH_MODIFIER_KEY_EVENT);
     modifiers.normal[i].activated = true;
@@ -1213,7 +1220,7 @@ function _emulateToActivateModifiers(aTIP, aKeyEvent)
     if (aTIP.getModifierState(modifiers.lockable[i].key)) {
       continue; // already activated.
     }
-    var event = new KeyboardEvent("", { key: modifiers.lockable[i].key });
+    var event = new aWindow.KeyboardEvent("", { key: modifiers.lockable[i].key });
     aTIP.keydown(event,
       aTIP.KEY_NON_PRINTABLE_KEY | aTIP.KEY_DONT_DISPATCH_MODIFIER_KEY_EVENT);
     aTIP.keyup(event,
@@ -1223,7 +1230,7 @@ function _emulateToActivateModifiers(aTIP, aKeyEvent)
   return modifiers;
 }
 
-function _emulateToInactivateModifiers(aTIP, aModifiers)
+function _emulateToInactivateModifiers(aTIP, aModifiers, aWindow)
 {
   if (!aModifiers) {
     return;
@@ -1232,7 +1239,7 @@ function _emulateToInactivateModifiers(aTIP, aModifiers)
     if (!aModifiers.normal[i].activated) {
       continue;
     }
-    var event = new KeyboardEvent("", { key: aModifiers.normal[i].key });
+    var event = new aWindow.KeyboardEvent("", { key: aModifiers.normal[i].key });
     aTIP.keyup(event,
       aTIP.KEY_NON_PRINTABLE_KEY | aTIP.KEY_DONT_DISPATCH_MODIFIER_KEY_EVENT);
   }
@@ -1243,7 +1250,7 @@ function _emulateToInactivateModifiers(aTIP, aModifiers)
     if (!aTIP.getModifierState(aModifiers.lockable[i].key)) {
       continue; // who already inactivated this?
     }
-    var event = new KeyboardEvent("", { key: aModifiers.lockable[i].key });
+    var event = new aWindow.KeyboardEvent("", { key: aModifiers.lockable[i].key });
     aTIP.keydown(event,
       aTIP.KEY_NON_PRINTABLE_KEY | aTIP.KEY_DONT_DISPATCH_MODIFIER_KEY_EVENT);
     aTIP.keyup(event,
@@ -1278,7 +1285,7 @@ function synthesizeComposition(aEvent, aWindow, aCallback)
   if (!TIP) {
     return false;
   }
-  var modifiers = _emulateToActivateModifiers(TIP, aEvent.key);
+  var modifiers = _emulateToActivateModifiers(TIP, aEvent.key, aWindow);
   var ret = false;
   var keyEventDict =
     "key" in aEvent ?
@@ -1303,7 +1310,7 @@ function synthesizeComposition(aEvent, aWindow, aCallback)
         break;
     }
   } finally {
-    _emulateToInactivateModifiers(TIP, modifiers);
+    _emulateToInactivateModifiers(TIP, modifiers, aWindow);
   }
 }
 /**
@@ -1393,7 +1400,7 @@ function synthesizeCompositionChange(aEvent, aWindow, aCallback)
     TIP.setCaretInPendingComposition(aEvent.caret.start);
   }
 
-  var modifiers = _emulateToActivateModifiers(TIP, aEvent.key);
+  var modifiers = _emulateToActivateModifiers(TIP, aEvent.key, aWindow);
   try {
     var keyEventDict =
       "key" in aEvent ?
@@ -1406,7 +1413,7 @@ function synthesizeCompositionChange(aEvent, aWindow, aCallback)
         null;
     TIP.flushPendingComposition(keyEvent, keyEventDict.flags);
   } finally {
-    _emulateToInactivateModifiers(TIP, modifiers);
+    _emulateToInactivateModifiers(TIP, modifiers, aWindow);
   }
 }
 
